@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<!--
+  cmdbuf.io - command buffers for Go.
+  A condensed, example-first guide to these libraries is published at
+  https://cmdbuf.io/README.md - useful for coding agents and quick reference.
+  Every example on this page compiles and runs against the current releases
+  of lesiw.io/command and lesiw.io/fs.
+-->
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Command buffers — run commands anywhere with Go's io package</title>
+    <meta name="description"
+        content="A command buffer is a command as an io.Reader: reading it runs it. Piping is io.Copy. One Machine interface runs the same Go code on the local system, over SSH, and in containers. Go packages lesiw.io/command and lesiw.io/fs.">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Apply saved theme before first paint.
+        try {
+            const t = localStorage.getItem("theme");
+            if (t) document.documentElement.dataset.theme = t;
+        } catch { }
+    </script>
+</head>
+
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header>
+        <div class="container">
+            <a class="wordmark" href="/">cmdbuf<span>.io</span></a>
+            <nav aria-label="Site">
+                <a href="https://pkg.go.dev/lesiw.io/command">Docs</a>
+                <a href="/README.md">Guide</a>
+                <button id="theme-toggle" aria-label="Theme: system">◐</button>
+                <a class="nav-star" href="https://github.com/lesiw/command">★ Star<span id="star-count"></span></a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main">
+        <div class="container">
+            <section class="hero">
+                <h1>Commands as byte streams.</h1>
+                <p class="lede">
+                    Command buffers are a Go vocabulary for automation:
+                    commands and files are byte streams, piping and copying
+                    are both <code>io.Copy</code>, and one
+                    <code>Machine</code> interface runs them everywhere —
+                    your own system, a container, a host across the network.
+                </p>
+                <div class="cta">
+                    <a class="btn" href="#start">Get started</a>
+                    <a class="btn" href="https://go.dev/play/p/eU9TkBMOCls">Playground</a>
+                    <a class="btn" href="https://pkg.go.dev/lesiw.io/command">API reference</a>
+                </div>
+
+<pre tabindex="0"><code>// Stream a database dump from a remote host into a local file.
+db := ssh.Machine(sys.Machine(), "ssh", "postgres@db1.example.com")
+_, err := io.Copy(
+    fs.CreateBuffer(ctx, command.FS(sys.Machine()), "backup.sql"),
+    command.NewReader(ctx, db, "pg_dumpall"),
+)</code></pre>
+                <p class="caption">
+                    No YAML, no scp, no shell quoting. Bytes stream from
+                    <code>pg_dumpall</code> on the database host straight into
+                    a local file. Swapping the source or destination machine is a
+                    one-line change.
+                </p>
+            </section>
+
+            <section id="automation-as-code">
+                <h2>Automation as code</h2>
+                <p>
+                    Command buffers are for the work that surrounds software:
+                    building and releasing it, moving files and data between
+                    machines, setting up servers and containers. That work
+                    usually lives in shell scripts, task runners, and pipeline
+                    configuration. As it grows conditionals, loops, and
+                    templating, the configuration becomes a programming
+                    language without a debugger, a formatter, or a test
+                    framework — and the tool itself is often replaced before
+                    the investment pays off.
+                </p>
+                <p>
+                    Command buffers start from the other end: a real
+                    programming language, with the pipelines and file
+                    operations automation needs. Scripts get functions,
+                    libraries, and tests from the first line; they ship as one
+                    static binary; and the same program runs on a laptop, in
+                    CI, and across Linux, macOS, and Windows. Every automation
+                    tool is a language to learn; few say so. This one's is
+                    Go. The <a href="https://go.dev/tour/">Tour of Go</a>
+                    covers the basics this page assumes.
+                </p>
+                <p>
+                    Adoption is incremental. One script or one CI job —
+                    usually the flaky one — can move first while everything
+                    around it stays put, because the
+                    result is an ordinary program that any existing pipeline
+                    job or playbook task can call. The exit is as cheap as
+                    the entry: these are small libraries on Go primitives
+                    behind a one-method interface, so the worst case is
+                    maintaining a fork or returning to
+                    <code>os/exec</code> — not migrating off a platform.
+                </p>
+            </section>
+
+            <section id="idea">
+                <h2>The model</h2>
+                <ul class="facts">
+                    <li>A <strong>Buffer</strong> is a command's execution as an
+                        <code>io.Reader</code>: the command starts on the first
+                        <code>Read</code> and is finished at <code>io.EOF</code>.</li>
+                    <li>A <strong>Machine</strong> is anything that can run a
+                        command — one interface, one method:
+                        <code>Command(ctx, args...) Buffer</code>.</li>
+                    <li><strong>Machines compose.</strong>
+                        <code>ssh</code>, <code>ctr</code>, and <code>sub</code>
+                        each take a Machine and return a new one, so a container
+                        on a remote host is just two calls.</li>
+                    <li><strong>Files are buffers too.</strong>
+                        <code>command.FS</code> gives any Machine a filesystem,
+                        copying between machines is <code>io.Copy</code>, and
+                        directories stream as tar archives.</li>
+                    <li>A <strong>Shell</strong> declares an execution
+                        environment — the commands a program may run, with
+                        portable operations for everything else — and that
+                        declaration is what makes automation portable.</li>
+                </ul>
+                <p>
+                    Every example on this page compiles and runs against the
+                    current releases of
+                    <a href="https://pkg.go.dev/lesiw.io/command">lesiw.io/command</a>
+                    and <a href="https://pkg.go.dev/lesiw.io/fs">lesiw.io/fs</a>.
+                </p>
+            </section>
+
+            <section id="buffers">
+                <h2>Reading runs the command</h2>
+                <p>
+                    A buffer is a command lifted into Go's <code>io</code>
+                    vocabulary. It executes because something consumes it —
+                    the way a shell pipeline moves when something reads the
+                    pipe — so everything built for <code>io.Reader</code> and
+                    <code>io.Writer</code> already works on commands, from
+                    <code>bufio.Scanner</code> to <code>io.MultiWriter</code>.
+                </p>
+<pre tabindex="0"><code>package main
+
+import (
+    "context"
+    "fmt"
+    "io"
+    "log"
+
+    "lesiw.io/command"
+    "lesiw.io/command/mem"
+)
+
+func main() {
+    ctx, m := context.Background(), mem.Machine()
+
+    out, err := io.ReadAll(command.NewReader(ctx, m, "echo", "Hello, world!"))
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("%s", out)
+}</code></pre>
+                <p class="playground">
+                    <a href="https://go.dev/play/p/Bih75QdcZdw">Run this program in the Go Playground</a>
+                    — <code>mem.Machine</code> is an in-memory machine, so the
+                    example works anywhere.
+                </p>
+                <p>
+                    Because a pipe is just bytes moving from a reader to a
+                    writer, piping one command into another is
+                    <code>io.Copy</code>.
+                </p>
+<pre tabindex="0"><code>// echo "hello, pipes" | tr a-z A-Z
+_, err := io.Copy(
+    command.NewWriter(ctx, m, "tr", "a-z", "A-Z"),
+    command.NewReader(ctx, m, "echo", "hello, pipes"),
+)</code></pre>
+                <p class="playground">
+                    For pipelines of three or more stages, use
+                    <a href="https://pkg.go.dev/lesiw.io/command#Copy"><code>command.Copy</code></a>
+                    with <code>command.NewFilter</code> for the middle commands
+                    — <a href="https://go.dev/play/p/eU9TkBMOCls">run one in the
+                    Go Playground</a>.
+                </p>
+                <p>
+                    Three helpers cover the everyday cases, so most code never
+                    touches a buffer directly.
+                </p>
+<pre tabindex="0"><code>// version=$(go version)     — capture output, like command substitution.
+version, err := command.Read(ctx, m, "go", "version")
+
+// go test ./... &gt;/dev/null  — run for the side effect, discard output.
+err = command.Do(ctx, m, "go", "test", "./...")
+
+// go vet ./...              — attach to the terminal, stream output live.
+err = command.Exec(ctx, m, "go", "vet", "./...")</code></pre>
+                <p>
+                    Environment variables travel on the context, so they
+                    compose the way the rest of Go does.
+                </p>
+<pre tabindex="0"><code>ctx = command.WithEnv(ctx, map[string]string{"CGO_ENABLED": "0"})
+err := command.Exec(ctx, m, "go", "build", ".")</code></pre>
+            </section>
+
+            <section id="machines">
+                <h2>Anything that runs a command is a machine</h2>
+                <p>
+                    The interface has one method. Everything else in the
+                    package is built on it.
+                </p>
+<pre tabindex="0"><code>type Machine interface {
+    Command(ctx context.Context, arg ...string) Buffer
+}</code></pre>
+                <div class="machine-grid breakout">
+                    <div>
+                        <h3>Local system</h3>
+                        <pre tabindex="0"><code>m := sys.Machine()</code></pre>
+                        <p>Runs commands with os/exec.</p>
+                    </div>
+                    <div>
+                        <h3>Remote host</h3>
+                        <pre tabindex="0"><code>m := ssh.Machine(sys.Machine(),
+    "ssh", "user@host")</code></pre>
+                        <p>Any ssh command line works: ports, keys, sshpass, autossh, jump hosts.</p>
+                    </div>
+                    <div>
+                        <h3>Container</h3>
+                        <pre tabindex="0"><code>m := ctr.Machine(sys.Machine(),
+    "alpine:latest")</code></pre>
+                        <p>Docker, Podman, or nerdctl — detected automatically.
+                            Starts on first use.</p>
+                    </div>
+                    <div>
+                        <h3>Command prefix</h3>
+                        <pre tabindex="0"><code>m := sub.Machine(sys.Machine(),
+    "busybox")</code></pre>
+                        <p>Prefixes every command: an applet runner, a
+                            <code>kubectl exec</code>, a wrapper CLI.</p>
+                    </div>
+                    <div>
+                        <h3>In-memory</h3>
+                        <pre tabindex="0"><code>m := mem.Machine()</code></pre>
+                        <p>Real implementations of echo, cat, tee, and tr over
+                            an in-memory filesystem. Runs in the Go Playground.</p>
+                    </div>
+                    <div>
+                        <h3>Mock</h3>
+                        <pre tabindex="0"><code>m := new(mock.Machine)</code></pre>
+                        <p>Programmable responses and call recording for tests.</p>
+                    </div>
+                </div>
+                <p>
+                    SSH is the remote transport, and by now it is close to
+                    universal — every major operating system ships an OpenSSH
+                    server, Windows included. A Windows host is a remote like
+                    any other; commands travel to it as a base64-encoded
+                    PowerShell script, which survives every quoting layer in
+                    between — the quoting is
+                    <a href="https://github.com/lesiw/command/blob/main/ssh/quoting_fuzz_test.go">fuzz-tested</a>.
+                    The script targets Windows PowerShell 5.1, stock on
+                    Windows Server, and encoded commands run without
+                    execution-policy changes.
+                </p>
+<pre tabindex="0"><code>win := ssh.Machine(sys.Machine(), "ssh", "admin@win.example.com")
+sh := command.Shell(win)
+fmt.Println(sh.OS(ctx), sh.Arch(ctx))     // windows amd64
+err := sh.WriteFile(ctx, "app.yaml", cfg) // PowerShell idioms underneath</code></pre>
+                <p>
+                    Machines take machines. <code>ssh.Machine</code> needs
+                    somewhere to run <code>ssh</code>; <code>ctr.Machine</code>
+                    needs somewhere to run <code>docker</code>. That somewhere
+                    is another Machine — so environments nest by construction.
+                </p>
+<pre tabindex="0"><code>// A container on a remote build host.
+host := ssh.Machine(sys.Machine(), "ssh", "admin@build.example.com")
+m := ctr.Machine(host, "golang:latest")
+defer command.Shutdown(ctx, m)
+
+sh := command.Shell(m, "go")
+if err := sh.Exec(ctx, "go", "test", "./..."); err != nil {
+    log.Fatal(err)
+}</code></pre>
+                <figure class="diagram">
+                    <svg viewBox="0 0 720 200" role="img"
+                        aria-label="Diagram: a program on a laptop reaches a container on a remote build host. sys.Machine runs commands on the laptop; ssh.Machine wraps it to reach build.example.com; ctr.Machine wraps that to run go test inside a golang container on the host.">
+                        <defs>
+                            <marker id="arrow-a" viewBox="0 0 10 10" refX="9" refY="5"
+                                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+                            </marker>
+                        </defs>
+                        <rect x="8" y="40" width="150" height="120" rx="8"
+                            fill="var(--bg-soft)" stroke="var(--border)" />
+                        <text x="83" y="26" text-anchor="middle" class="d-env">laptop</text>
+                        <text x="83" y="90" text-anchor="middle" class="d-cmd">your program</text>
+                        <text x="83" y="130" text-anchor="middle" class="d-code">sys.Machine()</text>
+                        <line x1="162" y1="100" x2="246" y2="100"
+                            stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow-a)" />
+                        <text x="204" y="88" text-anchor="middle" class="d-hop">ssh</text>
+                        <rect x="254" y="40" width="196" height="120" rx="8"
+                            fill="var(--bg-soft)" stroke="var(--border)" />
+                        <text x="352" y="26" text-anchor="middle" class="d-env">build.example.com</text>
+                        <text x="352" y="90" text-anchor="middle" class="d-cmd">docker CLI</text>
+                        <text x="352" y="130" text-anchor="middle" class="d-code">ssh.Machine(m, "ssh", …)</text>
+                        <line x1="454" y1="100" x2="538" y2="100"
+                            stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow-a)" />
+                        <text x="496" y="88" text-anchor="middle" class="d-hop">docker exec</text>
+                        <rect x="546" y="40" width="166" height="120" rx="8"
+                            fill="var(--bg-soft)" stroke="var(--border)" />
+                        <text x="629" y="26" text-anchor="middle" class="d-env">container</text>
+                        <text x="629" y="90" text-anchor="middle" class="d-cmd">go test ./...</text>
+                        <text x="629" y="130" text-anchor="middle" class="d-code">ctr.Machine(host, …)</text>
+                    </svg>
+                    <figcaption class="caption">
+                        Each constructor names one hop. The program only ever
+                        holds a <code>Machine</code>.
+                    </figcaption>
+                </figure>
+                <p>
+                    A prefix glued onto a command —
+                    <code>ssh&nbsp;host&nbsp;…</code>,
+                    <code>docker&nbsp;exec&nbsp;…</code>,
+                    <code>env&nbsp;FOO=bar&nbsp;…</code> — is a machine that
+                    hasn't been named yet. Once it is one, the code that runs
+                    commands no longer depends on where they run: the same
+                    program works on a laptop, in a container, and on a
+                    production host.
+                </p>
+                <p>
+                    A machine doesn't have to be a computer. It can be a single
+                    command, enriched — here, a shim that injects an environment
+                    variable into every <code>go</code> invocation.
+                </p>
+<pre tabindex="0"><code>m := command.HandleFunc(sys.Machine(), "go",
+    func(ctx context.Context, args ...string) command.Buffer {
+        ctx = command.WithEnv(ctx, map[string]string{
+            "GOFLAGS": "-trimpath",
+        })
+        return sys.Machine().Command(ctx, args...)
+    })
+
+flags, err := command.Read(ctx, m, "go", "env", "GOFLAGS")
+// flags == "-trimpath"</code></pre>
+            </section>
+
+            <section id="files">
+                <h2>Files are buffers too</h2>
+                <p>
+                    <code>command.FS</code> turns any machine into a filesystem,
+                    accessed through
+                    <a href="https://pkg.go.dev/lesiw.io/fs">lesiw.io/fs</a> —
+                    a context-aware cousin of <code>io/fs</code> with write
+                    support. On machines without native filesystem access, file
+                    operations are implemented with the commands the target
+                    system has: <code>tee</code> on Unix,
+                    <code>Remove-Item</code> on Windows. Your code doesn't see
+                    the difference — and Windows is an origin, not just a
+                    destination. The same program compiles for and runs on a
+                    Windows host.
+                </p>
+<pre tabindex="0"><code>sh := command.Shell(sys.Machine())
+fmt.Println(sh.OS(ctx), sh.Arch(ctx))          // windows amd64
+err := sh.WriteFile(ctx, "out.txt", data)      // PowerShell idioms underneath
+err = sh.MkdirAll(ctx, `logs\2026`)            // no mkdir -p in sight</code></pre>
+<pre tabindex="0"><code>fsys := command.FS(m)
+
+err := fs.WriteFile(ctx, fsys, "greeting.txt", []byte("Hello from fs!\n"))
+
+data, err := fs.ReadFile(ctx, fsys, "greeting.txt")</code></pre>
+                <p class="playground">
+                    <a href="https://go.dev/play/p/0UjNOYQ_kN-">Run this program in the Go Playground</a>.
+                </p>
+                <p>
+                    Copying a file between machines is the same
+                    <code>io.Copy</code> as piping commands. The operations
+                    scp, docker&nbsp;cp, and cp share one implementation.
+                </p>
+<pre tabindex="0"><code>local := command.Shell(sys.Machine())
+remote := command.Shell(ssh.Machine(sys.Machine(), "ssh", "deploy@prod.example.com"))
+
+// Stream a local build to the remote host.
+_, err := io.Copy(
+    remote.CreateBuffer(ctx, "/opt/app/server"),
+    local.OpenBuffer(ctx, "bin/server"),
+)</code></pre>
+                <p>
+                    A directory is a buffer too: a tar archive, indicated by a
+                    trailing slash. Copying a directory into a container looks
+                    exactly like copying a file.
+                </p>
+<pre tabindex="0"><code>box := ctr.Machine(sys.Machine(), "alpine:latest")
+defer command.Shutdown(ctx, box)
+
+local, remote := command.Shell(sys.Machine()), command.Shell(box)
+
+dst, err := remote.Create(ctx, "/app/")   // trailing slash: a directory
+if err != nil {
+    log.Fatal(err)
+}
+defer dst.Close()
+src, err := local.Open(ctx, "src/")
+if err != nil {
+    log.Fatal(err)
+}
+defer src.Close()
+if _, err := io.Copy(dst, src); err != nil {
+    log.Fatal(err)
+}</code></pre>
+                <p>
+                    Because commands and files are the same shape, they mix in
+                    one pipeline. This example dumps a database, compresses it
+                    in flight, and lands it on another machine, touching no
+                    disk along the way.
+                </p>
+<pre tabindex="0"><code>backup := ssh.Machine(m, "ssh", "backup@vault.example.com")
+_, err := command.Copy(
+    fs.CreateBuffer(ctx, command.FS(backup), "db.sql.gz"),
+    command.NewReader(ctx, m, "pg_dumpall"),
+    command.NewFilter(ctx, m, "gzip"),
+)</code></pre>
+                <figure class="diagram">
+                    <svg viewBox="0 0 640 190" role="img"
+                        aria-label="Diagram: one pipeline across three machines. pg_dumpall runs on db host db1.example.com as a NewReader, gzip runs on the laptop as a NewFilter, and a CreateBuffer file buffer writes db.sql.gz on vault.example.com. Bytes flow end to end with no intermediate files.">
+                        <defs>
+                            <marker id="arrow-b" viewBox="0 0 10 10" refX="9" refY="5"
+                                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+                            </marker>
+                        </defs>
+                        <rect x="8" y="40" width="186" height="100" rx="8"
+                            fill="var(--bg-soft)" stroke="var(--border)" />
+                        <text x="101" y="26" text-anchor="middle" class="d-env">db1.example.com</text>
+                        <text x="101" y="82" text-anchor="middle" class="d-cmd">pg_dumpall</text>
+                        <text x="101" y="118" text-anchor="middle" class="d-code">NewReader</text>
+                        <line x1="198" y1="90" x2="250" y2="90"
+                            stroke="var(--accent)" stroke-width="2.5" marker-end="url(#arrow-b)" />
+                        <rect x="258" y="40" width="128" height="100" rx="8"
+                            fill="var(--bg-soft)" stroke="var(--border)" />
+                        <text x="322" y="26" text-anchor="middle" class="d-env">laptop</text>
+                        <text x="322" y="82" text-anchor="middle" class="d-cmd">gzip</text>
+                        <text x="322" y="118" text-anchor="middle" class="d-code">NewFilter</text>
+                        <line x1="390" y1="90" x2="442" y2="90"
+                            stroke="var(--accent)" stroke-width="2.5" marker-end="url(#arrow-b)" />
+                        <rect x="450" y="40" width="182" height="100" rx="8"
+                            fill="var(--bg-soft)" stroke="var(--border)" />
+                        <text x="541" y="26" text-anchor="middle" class="d-env">vault.example.com</text>
+                        <text x="541" y="82" text-anchor="middle" class="d-cmd">db.sql.gz</text>
+                        <text x="541" y="118" text-anchor="middle" class="d-code">CreateBuffer</text>
+                        <text x="320" y="172" text-anchor="middle" class="d-env">command.Copy — bytes flow end to end; nothing touches an intermediate file</text>
+                    </svg>
+                </figure>
+            </section>
+
+            <section id="shell">
+                <h2>Shells make automation portable</h2>
+                <p>
+                    <code>command.Shell</code> exists to keep automation
+                    portable. It wraps a machine with two things: operations
+                    that work on any machine for everything a filesystem can
+                    do, and an explicit list of the external commands your
+                    automation is allowed to run. Anything you didn't declare
+                    fails with <em>command not found</em> at the moment of the
+                    call — the dependency list lives at the top of the file, and it stays short
+                    because most of what shell scripts shell out for doesn't
+                    need a command at all.
+                </p>
+<pre tabindex="0"><code>sh := command.Shell(sys.Machine(), "go")
+
+if err := sh.Exec(ctx, "go", "vet", "./..."); err != nil {
+    log.Fatal(err)
+}
+
+ver, err := sh.ReadFile(ctx, "VERSION")
+if err != nil {
+    ver = []byte("dev")
+}
+
+if err := sh.MkdirAll(ctx, "bin"); err != nil {
+    log.Fatal(err)
+}
+err = sh.Exec(
+    command.WithEnv(ctx, map[string]string{"CGO_ENABLED": "0"}),
+    "go", "build", "-ldflags", "-X main.version="+string(ver),
+    "-o", "bin/app", ".",
+)</code></pre>
+                <p>
+                    The build declares only <code>go</code>. Reading VERSION and
+                    creating the output directory go through the Shell's
+                    portable methods, which work on any machine — including
+                    Windows, where <code>cat</code> and <code>mkdir -p</code>
+                    do not exist. Both libraries' CI suites
+                    (<a href="https://github.com/lesiw/command/blob/main/.github/workflows/ci.yml">command</a>,
+                    <a href="https://github.com/lesiw/fs/blob/main/.github/workflows/main.yml">fs</a>)
+                    run the tests — not just the build — on Linux, macOS,
+                    Windows, FreeBSD, and Alpine.
+                </p>
+                <div class="table-scroll breakout" tabindex="0" role="region" aria-label="Shell idioms and their command buffer equivalents">
+                    <table>
+                        <caption class="visually-hidden">Shell idioms and their command buffer equivalents</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Shell idiom</th>
+                                <th scope="col">PowerShell idiom</th>
+                                <th scope="col">Command buffer equivalent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>cat file</code></td><td><code>Get-Content file</code></td><td><code>sh.ReadFile(ctx, "file")</code></td></tr>
+                            <tr><td><code>echo x &gt; file</code></td><td><code>Set-Content file x</code></td><td><code>sh.WriteFile(ctx, "file", data)</code></td></tr>
+                            <tr><td><code>mkdir -p dir</code></td><td><code>New-Item -ItemType Directory</code></td><td><code>sh.MkdirAll(ctx, "dir")</code></td></tr>
+                            <tr><td><code>rm -rf dir</code></td><td><code>Remove-Item -Recurse -Force</code></td><td><code>sh.RemoveAll(ctx, "dir")</code></td></tr>
+                            <tr><td><code>mktemp</code></td><td><code>New-TemporaryFile</code></td><td><code>sh.Temp(ctx, "prefix")</code></td></tr>
+                            <tr><td><code>uname -sm</code></td><td><code>$env:OS, $env:PROCESSOR_ARCHITECTURE</code></td><td><code>sh.OS(ctx)</code>, <code>sh.Arch(ctx)</code></td></tr>
+                            <tr><td><code>which cmd</code></td><td><code>Get-Command cmd</code></td><td><code>command.NotFound(command.Do(ctx, m, "cmd", "--version"))</code></td></tr>
+                            <tr><td><code>tar -cf- dir</code></td><td><code>Compress-Archive dir</code></td><td><code>sh.Open(ctx, "dir/")</code></td></tr>
+                            <tr><td><code>a | b</code></td><td><code>a | b</code></td><td><code>io.Copy(command.NewWriter(…), command.NewReader(…))</code></td></tr>
+                            <tr><td><code>set -x</code></td><td><code>Set-PSDebug -Trace 1</code></td><td><code>CMDTRACE=on</code> in the environment</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="testing">
+                <h2>Automation you can test</h2>
+                <p>
+                    Automation written against <code>Machine</code> is code, so
+                    it tests like code. <code>mock.Machine</code> records every
+                    call and returns whatever you program.
+                </p>
+<pre tabindex="0"><code>func Deploy(ctx context.Context, sh *command.Sh) error {
+    branch, err := sh.Read(ctx, "git", "branch", "--show-current")
+    if err != nil {
+        return fmt.Errorf("read branch: %w", err)
+    }
+    return sh.Exec(ctx, "git", "push", "origin", branch)
+}
+
+func TestDeploy(t *testing.T) {
+    m := new(mock.Machine)
+    m.Return(strings.NewReader("main\n"), "git", "branch", "--show-current")
+
+    sh := command.Shell(m, "git")
+    if err := Deploy(t.Context(), sh); err != nil {
+        t.Fatal(err)
+    }
+
+    got := mock.Calls(sh, "git")
+    want := []mock.Call{
+        {Args: []string{"git", "branch", "--show-current"}},
+        {Args: []string{"git", "push", "origin", "main"}},
+    }
+    if !cmp.Equal(want, got) {
+        t.Errorf("git calls mismatch (-want +got):\n%s", cmp.Diff(want, got))
+    }
+}</code></pre>
+                <p>
+                    No git repository, no network, no side effects — and the
+                    test asserts the exact commands your automation would have
+                    run in production.
+                </p>
+                <p>
+                    The <a href="/README.md">guide</a> carries these patterns
+                    and the rest of the vocabulary in a form sized for a
+                    coding agent's context window.
+                </p>
+                <p>
+                    Unprogrammed commands succeed with empty output, so tests
+                    only stub what they assert. For a strict mock, set the
+                    default response instead — <code>Return</code> with no
+                    command arguments applies to every unprogrammed command,
+                    and a zero-code failure reads as <em>command not
+                    found</em>.
+                </p>
+<pre tabindex="0"><code>m.Return(command.Fail(&amp;command.Error{Err: fmt.Errorf("unexpected command")}))
+
+err := command.Do(ctx, m, "anything")   // fails
+command.NotFound(err)                   // true</code></pre>
+            </section>
+
+
+            <section id="failure">
+                <h2>When a command fails</h2>
+                <p>
+                    Automation spends much of its life handling failure, so
+                    failures carry their evidence. A failed command returns a
+                    <code>*command.Error</code> with the exit code and
+                    captured stderr.
+                </p>
+<pre tabindex="0"><code>err := command.Do(ctx, m, "go", "build", ".")
+
+var cerr *command.Error
+if errors.As(err, &amp;cerr) {
+    fmt.Println("exit code:", cerr.Code)
+    fmt.Printf("stderr:\n%s", cerr.Log)
+}</code></pre>
+                <p>
+                    When a multi-stage pipeline fails, the error reports every
+                    stage and its outcome, identifying the failing machine
+                    and command.
+                </p>
+<pre tabindex="0"><code>_, err := command.Copy(
+    command.NewWriter(ctx, m, "wc", "-c"),
+    command.NewReader(ctx, m, "echo", "not gzip data"),
+    command.NewFilter(ctx, m, "gzip", "-d"),
+)
+fmt.Println(err)
+// &lt;*command.reader&gt;
+//     &lt;success&gt;
+//
+// &lt;*command.filter&gt;
+//     exit status 1
+//         gzip: unknown compression format</code></pre>
+                <p>
+                    Output produced before a failure is not lost: reads
+                    return the bytes that arrived, and the error follows.
+                    Cancellation follows the context. Cancel the
+                    <code>ctx</code> and a running command is killed; the
+                    pending <code>Read</code> returns the error, and no
+                    process is left behind. <code>NewReader</code>'s
+                    <code>Close</code> does the same for early exits from a
+                    pipe.
+                </p>
+                <p>
+                    And failures are programmable in tests, so the error path
+                    gets exercised as easily as the happy path.
+                </p>
+<pre tabindex="0"><code>m.Return(command.Fail(&amp;command.Error{Code: 1}), "git", "push")
+
+if err := Deploy(t.Context(), sh); err == nil {
+    t.Error("Deploy() should fail when the push fails")
+}</code></pre>
+            </section>
+
+            <section id="ci">
+                <h2>Inside the CI you already have</h2>
+                <p>
+                    Command buffers don't replace a CI system; they replace
+                    the scripts inside it. A pipeline job runs a Go program.
+                </p>
+<pre tabindex="0"><code>deploy:
+  stage: deploy
+  script: go run ./ops deploy</code></pre>
+                <p>
+                    Reproducing that job on a laptop is the same command:
+                    <code>go run ./ops deploy</code>. The YAML shrinks to a
+                    list of triggers; the logic — the part that breaks — lives
+                    in a program that runs anywhere, so a failing job can be
+                    reproduced and debugged without pushing a commit to find
+                    out. The orchestrator stops mattering: GitLab, Jenkins,
+                    GitHub Actions, or nothing at all — a job becomes a
+                    program invocation, and an artifact becomes a file or
+                    directory stream the program moves itself. Porting can
+                    start with a single job, usually the flaky one, while the
+                    rest of the pipeline stays put. The program is an
+                    ordinary process, so variables and secrets the CI system
+                    injects arrive as plain environment, and caching stays
+                    where it was — the runner caches directories, whatever
+                    the job runs.
+                </p>
+            </section>
+
+            <section id="why">
+                <h2>Why Go for automation</h2>
+                <p>
+                    Any compiled language could take automation out of
+                    configuration formats. Go's particulars make it a good
+                    choice:
+                </p>
+                <ul>
+                    <li><strong>It keeps working.</strong> The
+                        <a href="https://go.dev/doc/go1compat">Go 1 compatibility
+                        promise</a> means automation written today still builds
+                        years from now.</li>
+                    <li><strong>Dependencies are solved.</strong>
+                        <a href="https://go.dev/ref/mod">Modules</a> give
+                        automation code the same sharing and versioning as any
+                        other code.</li>
+                    <li><strong>Concurrency is ordinary.</strong> Backing up one
+                        host and backing up a hundred are the same code plus a
+                        goroutine per host.</li>
+                </ul>
+                <p>
+                    Command buffers are not a replacement for a five-line shell
+                    script. They're for the automation that outgrew one — the
+                    build that needs a real conditional, the deploy that spans
+                    three machines, the script someone finally asked you to
+                    write a test for.
+                </p>
+            </section>
+
+            <section id="start">
+                <h2>Get started</h2>
+<pre tabindex="0"><code>go get lesiw.io/command</code></pre>
+                <p>A complete program.</p>
+<pre tabindex="0"><code>package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "lesiw.io/command"
+    "lesiw.io/command/sys"
+)
+
+func main() {
+    ctx, m := context.Background(), sys.Machine()
+
+    version, err := command.Read(ctx, m, "go", "version")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(version)
+}</code></pre>
+                <h3>Keep reading</h3>
+                <ul>
+                    <li><a href="https://pkg.go.dev/lesiw.io/command">lesiw.io/command</a>
+                        — full API documentation, including a cookbook of shell
+                        idioms translated to Go.</li>
+                    <li><a href="https://pkg.go.dev/lesiw.io/fs">lesiw.io/fs</a>
+                        — the filesystem abstraction: local, remote, and
+                        in-memory filesystems behind one interface.</li>
+                    <li><a href="/README.md">The cmdbuf guide</a> — a condensed,
+                        example-first reference for writing idiomatic command
+                        buffer code. Written with coding agents in mind; humans
+                        welcome too.</li>
+                    <li><a href="https://github.com/lesiw/command">Source on GitHub</a>.</li>
+                </ul>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>© 2026 <a href="https://github.com/lesiw">Chris Lesiw</a> ·
+                <a href="https://github.com/lesiw/command/blob/main/LICENSE">BSD-3-Clause</a></p>
+            <p>
+                <a href="https://pkg.go.dev/lesiw.io/command">Documentation</a> ·
+                <a href="https://github.com/lesiw/command">GitHub</a> ·
+                <a href="https://cmdbuf.github.io">Mirror</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Star count: cosmetic; fails silently offline or when rate-limited.
+        fetch("https://api.github.com/repos/lesiw/command")
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+                if (d && d.stargazers_count) {
+                    document.getElementById("star-count").textContent =
+                        " " + d.stargazers_count;
+                }
+            })
+            .catch(() => { });
+
+        // Theme toggle: cycles system → dark → light, like pkg.go.dev.
+        // The button shows the current state; "system" stores nothing
+        // and follows the OS preference.
+        const toggle = document.getElementById("theme-toggle");
+        const themeIcons =
+            { system: "◐", dark: "●", light: "○" };
+        const themeOrder =
+            { system: "dark", dark: "light", light: "system" };
+        function paintToggle() {
+            const t = document.documentElement.dataset.theme || "system";
+            toggle.textContent = themeIcons[t];
+            toggle.setAttribute("aria-label", `Theme: ${t}`);
+            toggle.title = `Theme: ${t}`;
+        }
+        toggle.addEventListener("click", () => {
+            const root = document.documentElement;
+            const next = themeOrder[root.dataset.theme || "system"];
+            if (next === "system") {
+                delete root.dataset.theme;
+                try { localStorage.removeItem("theme"); } catch { }
+            } else {
+                root.dataset.theme = next;
+                try { localStorage.setItem("theme", next); } catch { }
+            }
+            paintToggle();
+        });
+        paintToggle();
+
+        // Minimal Go syntax highlighting. Text content is unchanged;
+        // without JavaScript, code renders as plain text.
+        const rules = new RegExp(
+            "(\\/\\/[^\\n]*)" +                                   // comment
+            "|(`[^`]*`|\"(?:[^\"\\\\\\n]|\\\\.)*\")" +            // string
+            "|\\b(func|return|if|else|for|range|var|const|type" +
+            "|struct|interface|map|chan|go|defer|select|switch" +
+            "|case|break|continue|package|import|fallthrough" +
+            "|goto|nil|true|false|iota|new|make|len|cap|append" +
+            "|copy|delete|panic|recover|error|string|byte|bool" +
+            "|int|int64|uint|float64|any)\\b" +                   // keyword
+            "|\\b(\\d+(?:\\.\\d+)?)\\b",                          // number
+            "g");
+        const classes = ["c", "s", "k", "n"];
+        for (const block of document.querySelectorAll("pre > code")) {
+            const text = block.textContent;
+            let html = "", last = 0;
+            const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+            for (const m of text.matchAll(rules)) {
+                html += esc(text.slice(last, m.index));
+                const i = m.slice(1).findIndex(g => g !== undefined);
+                html += `<span class="${classes[i]}">${esc(m[0])}</span>`;
+                last = m.index + m[0].length;
+            }
+            html += esc(text.slice(last));
+            block.innerHTML = html;
+        }
+    </script>
+</body>
+
+</html>

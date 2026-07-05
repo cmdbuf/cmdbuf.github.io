@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .tile { fill: #f6f8fa; stroke: #d1d9e0; stroke-width: 1; }
+    .chev { stroke: #007d9c; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #0f172a; stroke: none; }
+      .chev { stroke: #00ADD8; }
+    }
+  </style>
+  <rect class="tile" x="0.5" y="0.5" width="31" height="31" rx="6"/>
+  <path class="chev" d="M6 6 L12 16 L6 26" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path class="chev" d="M14 6 L20 16 L14 26" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path class="chev" d="M22 6 L28 16 L22 26" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

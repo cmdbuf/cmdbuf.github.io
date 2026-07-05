@@ -1,0 +1,26 @@
+# cmdbuf.io
+
+> Command buffers: Go libraries for automation. A command is an
+> io.Reader (reading it runs it), files and directories are byte
+> streams, and one Machine interface runs commands on the local
+> system, over SSH, and in containers. Packages: lesiw.io/command
+> and lesiw.io/fs.
+
+Every example in these documents compiles and runs against the
+current releases.
+
+## Docs
+
+- [Field guide](https://cmdbuf.io/README.md): condensed, example-first
+  reference written for coding agents — mental model, shell-to-Go
+  translation table, common mistakes, API quick reference
+- [Website](https://cmdbuf.io/): concepts with worked examples
+- [API reference: command](https://pkg.go.dev/lesiw.io/command)
+- [API reference: fs](https://pkg.go.dev/lesiw.io/fs)
+- [Source](https://github.com/lesiw/command)
+
+## Mirrors
+
+- [Site mirror](https://cmdbuf.github.io/): same content, hosted on
+  GitHub Pages for restricted networks
+- [Guide mirror](https://cmdbuf.github.io/README.md)
